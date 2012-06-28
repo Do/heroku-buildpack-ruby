@@ -78,6 +78,7 @@ class LanguagePack::Ruby < LanguagePack::Base
     install_jvm
     setup_language_pack_environment
     setup_profiled
+    install_libgd
     allow_git do
       install_language_pack_gems
       build_bundler
@@ -379,6 +380,17 @@ WARNING
   # @param [String] relative path of the binary on the slug
   def uninstall_binary(path)
     FileUtils.rm File.join('bin', File.basename(path)), :force => true
+  end
+
+  # Install libgd2 headers and dev libs. Cedar has the primary lib already.
+  # Unfortunately we can't install to /usr, so symlink all of the things.
+  def install_libgd
+    dir = File.join('vendor', LIBGD_VENDOR_PATH)
+    FileUtils.mkdir_p dir
+    Dir.chdir(dir) do
+      run("curl #{DO_VENDOR_URL}/libgd2-noxpm-dev-stripped_#{LIBGD_VERSION}_amd64.tar.gz -s -o - | tar xzf -")
+      run("ln -fs /usr/lib/libgd.so.2.0.0 lib/libgd.so")
+    end
   end
 
   # install libyaml into the LP to be referenced for psych compilation
