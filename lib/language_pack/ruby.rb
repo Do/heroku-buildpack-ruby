@@ -3,6 +3,7 @@ require "rubygems"
 require "language_pack"
 require "language_pack/base"
 require "language_pack/bundler_lockfile"
+require 'benchmark'
 
 # base Ruby Language Pack. This is for any base ruby app.
 class LanguagePack::Ruby < LanguagePack::Base
@@ -84,6 +85,7 @@ class LanguagePack::Ruby < LanguagePack::Base
       build_bundler
       create_database_yml
       install_binaries
+      build_native_extensions
       run_assets_precompile_rake_task
     end
     super
@@ -637,6 +639,19 @@ params = CGI.parse(uri.query || "")
   # @return [Array] the node.js binary path if we need it or an empty Array
   def add_node_js_binary
     gem_is_bundled?('execjs') ? [NODE_JS_BINARY_PATH] : []
+  end
+
+  # Build any native extensions (Do convention for path-specified Bundler deps)
+  def build_native_extensions
+    topic "Running: rake extensions:build"
+    time = Benchmark.realtime { pipe("env PATH=$PATH:bin bundle exec rake extensions:build 2>&1") }
+    if $?.success?
+      log 'extensions_build', :status => 'success'
+      puts "Extensions built (#{"%.2f" % time}s)"
+    else
+      log 'extensions_build', :status => 'failure'
+      error 'Error compiling native extensions'
+    end
   end
 
   def run_assets_precompile_rake_task
