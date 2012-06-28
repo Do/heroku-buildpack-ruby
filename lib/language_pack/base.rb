@@ -13,6 +13,7 @@ class LanguagePack::Base
   include LanguagePack::ShellHelpers
 
   VENDOR_URL = "https://s3.amazonaws.com/heroku-buildpack-ruby"
+  DO_VENDOR_URL = 'https://s3.amazonaws.com/do-heroku-buildpacks'
 
   attr_reader :build_path, :cache
 
