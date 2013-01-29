@@ -51,6 +51,18 @@ class LanguagePack::Ruby < LanguagePack::Base
     add_dev_database_addon
   end
 
+  # Default config envvars applied on first push. Different than
+  # `default_config_vars` which is actually used by the buildpack for the build
+  # environment
+  def default_config
+    {
+      # Defaults for the email deploy hook
+      "DEPLOYHOOKS_EMAIL_RECIPIENT" => "doods@do.com",
+      "DEPLOYHOOKS_EMAIL_SUBJECT"   => "[DEPLOY] {{app}} - {{user}}",
+      "DEPLOYHOOKS_EMAIL_BODY"      => "{{user}} deployed {{app}}.\n\nLog:\n{{git_log}}",
+    }
+  end
+
   def default_config_vars
     vars = {
       "LANG"     => "en_US.UTF-8",
