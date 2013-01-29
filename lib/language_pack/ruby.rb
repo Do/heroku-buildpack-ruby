@@ -81,6 +81,7 @@ class LanguagePack::Ruby < LanguagePack::Base
     setup_profiled
     install_libgd
     install_icu4c
+    install_postgresql_client
     allow_git do
       install_language_pack_gems
       build_bundler
@@ -227,7 +228,7 @@ private
   def setup_profiled
     set_env_override "GEM_PATH", "$HOME/#{slug_vendor_base}:$GEM_PATH"
     set_env_default  "LANG",     "en_US.UTF-8"
-    set_env_override "PATH",     "$HOME/bin:$HOME/#{slug_vendor_base}/bin:$PATH"
+    set_env_override "PATH",     "$HOME/bin:$HOME/#{slug_vendor_base}/bin:$HOME/vendor/#{PG_CLIENT_VENDOR_PATH}/bin:$PATH"
     set_env_default  "LD_LIBRARY_PATH", "/app/vendor/#{ICU4C_VENDOR_PATH}/lib"
 
     if ruby_version_jruby?
@@ -403,6 +404,15 @@ WARNING
     FileUtils.mkdir_p dir
     Dir.chdir(dir) do
       run("curl #{DO_VENDOR_URL}/icu4c-#{ICU4C_VERSION}.tar.gz -s -o - | tar xzf -")
+    end
+  end
+
+  # Install psql and pg_dump so `rake db:*` commands work properly
+  def install_postgresql_client
+    dir = File.join('vendor', PG_CLIENT_VENDOR_PATH)
+    FileUtils.mkdir_p dir
+    Dir.chdir(dir) do
+      run("curl #{DO_VENDOR_URL}/postgresql-client-#{PG_CLIENT_VERSION}.tar.gz -s -o - | tar xzf -")
     end
   end
 
