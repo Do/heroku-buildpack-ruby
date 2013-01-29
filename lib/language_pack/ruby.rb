@@ -52,7 +52,20 @@ class LanguagePack::Ruby < LanguagePack::Base
       'mailgun:starter',          # Mailgun for sending email
       'airbrake:developer',       # Exception catcher
       'loggly:mole',              # Log management
+      'deployhooks:email',        # Notification on deploy
     ]
+  end
+
+  # Default config envvars applied on first push. Different than
+  # `default_config_vars` which is actually used by the buildpack for the build
+  # environment
+  def default_config
+    {
+      # Defaults for the email deploy hook
+      "DEPLOYHOOKS_EMAIL_RECIPIENT" => "doods@do.com",
+      "DEPLOYHOOKS_EMAIL_SUBJECT"   => "[DEPLOY] {{app}} - {{user}}",
+      "DEPLOYHOOKS_EMAIL_BODY"      => "{{user}} deployed {{app}}.\n\nLog:\n{{git_log}}",
+    }
   end
 
   def default_config_vars

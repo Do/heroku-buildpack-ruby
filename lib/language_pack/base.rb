@@ -45,6 +45,10 @@ class LanguagePack::Base
     raise "must subclass"
   end
 
+  def default_config
+    raise "must subclass"
+  end
+
   # config vars to be set on first push.
   # @return [Hash] the result
   # @not: this is only set the first time an app is pushed to.
@@ -74,6 +78,7 @@ class LanguagePack::Base
 
     {
       "addons" => default_addons,
+      "config_vars" => default_config,
       "default_process_types" => default_process_types
     }.to_yaml
   end
