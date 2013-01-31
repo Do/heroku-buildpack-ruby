@@ -10,7 +10,8 @@ def s3_tools_dir
 end
 
 def s3_upload(tmpdir, name)
-  sh("#{s3_tools_dir}/s3 put #{S3_BUCKET_NAME} #{name}.tgz #{tmpdir}/#{name}.tgz")
+  # Do obviously can't upload to Heroku's bucket, so no-op. (Do.com-specific)
+  # sh("#{s3_tools_dir}/s3 put #{S3_BUCKET_NAME} #{name}.tgz #{tmpdir}/#{name}.tgz")
 end
 
 def vendor_plugin(git_url, branch = nil)
@@ -159,6 +160,7 @@ task "ruby:install", :version do |t, args|
   name           = "ruby-#{version}"
   usr_dir        = "usr"
   rubygems       = nil
+  pwd            = Dir.pwd
   Dir.mktmpdir("ruby-") do |tmpdir|
     Dir.chdir(tmpdir) do |dir|
       FileUtils.rm_rf("#{tmpdir}/*")
@@ -166,6 +168,14 @@ task "ruby:install", :version do |t, args|
       major_ruby = version.match(/\d\.\d/)[0]
       rubygems   = "1.8.24" if major_ruby == "1.8"
       sh "curl http://ftp.ruby-lang.org/pub/ruby/#{major_ruby}/#{full_name}.tar.gz -s -o - | tar zxf -"
+
+      # Apply patches. (Do.com-specific)
+      Dir.chdir(full_name) do
+        Dir["#{pwd}/ruby-patches/*"].each do |patchfile|
+          sh "patch -p1 -i #{patchfile}"
+        end
+      end
+
       FileUtils.mkdir_p("#{full_name}/#{usr_dir}")
       Dir.chdir("#{full_name}/#{usr_dir}") do
         sh "curl #{VENDOR_URL}/libyaml-0.1.4.tgz -s -o - | tar zxf -"
@@ -176,6 +186,9 @@ task "ruby:install", :version do |t, args|
       # runtime ruby
       prefix  = "/app/vendor/#{name}"
       build_ruby_command(full_name, name, prefix, usr_dir, tmpdir, rubygems)
+
+      # Copy tarball to main dir for later manual uploading. (Do.com-specific)
+      FileUtils.cp "#{name}.tgz", "#{pwd}/#{name}.tar.gz"
 
       # build ruby
       if major_ruby == "1.8"

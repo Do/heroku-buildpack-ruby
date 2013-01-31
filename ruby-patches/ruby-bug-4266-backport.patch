@@ -1,0 +1,248 @@
+diff --git c/ext/monitor/extconf.rb i/ext/monitor/extconf.rb
+new file mode 100644
+index 0000000..ce3dd2b
+--- /dev/null
++++ i/ext/monitor/extconf.rb
+@@ -0,0 +1,4 @@
++require 'mkmf'
++target = 'monitor_mixin'
++
++create_makefile(target)
+diff --git c/ext/monitor/monitor_mixin.c i/ext/monitor/monitor_mixin.c
+new file mode 100644
+index 0000000..a574c36
+--- /dev/null
++++ i/ext/monitor/monitor_mixin.c
+@@ -0,0 +1,111 @@
++/**********************************************************************
++
++  monitor_mixin.c -
++
++  $Author: Brian Gugliemetti $
++  created at: Wed Apr 27 14:51:06 CST 2011
++
++  All the files in this distribution are covered under the Ruby's
++  license (see the file COPYING).
++
++**********************************************************************/
++
++#include "ruby.h"
++
++static VALUE rb_mon_enter _((VALUE monitor));
++static VALUE rb_mon_exit _((VALUE monitor));
++static VALUE rb_mon_check_owner _((VALUE monitor));
++static VALUE rb_mon_synchronize _((VALUE monitor, VALUE args));
++void Init_monitor_mixin _((void));
++
++VALUE rb_mMonitorMixin;
++
++/*
++ * MonitorMixin methods
++ */
++
++VALUE
++rb_mon_check_owner(VALUE monitor)
++{
++    VALUE mon_owner = rb_ivar_get(monitor, rb_intern("@mon_owner"));
++    VALUE th = rb_thread_current();
++    if (mon_owner != th)
++    {
++        rb_raise(rb_eThreadError, "current thread not owner");
++    }
++}
++
++/*
++ * call-seq:
++ *   monitor_mixin.mon_enter -> int
++ *
++ * Returns number of times the monitor has entered.
++ */
++
++VALUE
++rb_mon_enter(VALUE monitor)
++{
++    VALUE mon_owner = rb_ivar_get(monitor, rb_intern("@mon_owner"));
++    VALUE mon_mutex = rb_ivar_get(monitor, rb_intern("@mon_mutex"));
++    VALUE mon_count;
++    ID mon_count_id;
++
++    VALUE th = rb_thread_current();
++
++    if (mon_owner != th)
++    {
++        rb_mutex_lock(mon_mutex);
++        rb_ivar_set(monitor, rb_intern("@mon_owner"), th);
++    }
++    mon_count = rb_ivar_get(monitor, mon_count_id = rb_intern("@mon_count"));
++    rb_ivar_set(monitor, mon_count_id, mon_count = INT2NUM(NUM2INT(mon_count) + 1));
++    return mon_count;
++}
++
++VALUE
++rb_mon_exit_no_check(VALUE monitor)
++{
++    VALUE mon_count;
++    VALUE mon_mutex;
++    ID mon_count_id;
++
++    mon_count = rb_ivar_get(monitor, mon_count_id = rb_intern("@mon_count"));
++    rb_ivar_set(monitor, mon_count_id, mon_count = INT2NUM(NUM2INT(mon_count) - 1));
++    if(mon_count == INT2NUM(0))
++    {
++        rb_ivar_set(monitor, rb_intern("@mon_owner"), Qnil);
++        mon_mutex = rb_ivar_get(monitor, rb_intern("@mon_mutex"));
++        rb_mutex_unlock(mon_mutex);
++    }
++    return mon_count;
++}
++
++VALUE
++rb_mon_exit(VALUE monitor)
++{
++    rb_mon_check_owner(monitor);
++    return rb_mon_exit_no_check(monitor);
++}
++
++VALUE
++mon_synchronize(VALUE monitor, VALUE (*func)(VALUE arg), VALUE arg)
++{
++    rb_mon_enter(monitor);
++    return rb_ensure(func, arg, rb_mon_exit_no_check, monitor);
++}
++
++VALUE
++rb_mon_synchronize(VALUE monitor, VALUE args)
++{
++    return mon_synchronize(monitor, rb_yield, Qnil);
++}
++
++void
++Init_monitor_mixin()
++{
++    rb_mMonitorMixin = rb_define_module("MonitorMixin");
++    rb_define_method(rb_mMonitorMixin, "mon_check_owner", rb_mon_check_owner, 0);
++    rb_define_method(rb_mMonitorMixin, "mon_enter", rb_mon_enter, 0);
++    rb_define_method(rb_mMonitorMixin, "mon_exit", rb_mon_exit, 0);
++    rb_define_method(rb_mMonitorMixin, "mon_synchronize", rb_mon_synchronize, 0);
++}
+diff --git c/lib/monitor.rb i/lib/monitor.rb
+index 9e26ec1..2b62519 100644
+--- c/lib/monitor.rb
++++ i/lib/monitor.rb
+@@ -7,6 +7,7 @@
+ #
+ 
+ require 'thread'
++require 'monitor_mixin.so'
+ 
+ #
+ # In concurrent programming, a monitor is an object or module intended to be
+@@ -177,42 +178,6 @@ module MonitorMixin
+   # For backward compatibility
+   alias try_mon_enter mon_try_enter
+ 
+-  #
+-  # Enters exclusive section.
+-  #
+-  def mon_enter
+-    if @mon_owner != Thread.current
+-      @mon_mutex.lock
+-      @mon_owner = Thread.current
+-    end
+-    @mon_count += 1
+-  end
+-
+-  #
+-  # Leaves exclusive section.
+-  #
+-  def mon_exit
+-    mon_check_owner
+-    @mon_count -=1
+-    if @mon_count == 0
+-      @mon_owner = nil
+-      @mon_mutex.unlock
+-    end
+-  end
+-
+-  #
+-  # Enters exclusive section and executes the block.  Leaves the exclusive
+-  # section automatically when the block exits.  See example under
+-  # +MonitorMixin+.
+-  #
+-  def mon_synchronize
+-    mon_enter
+-    begin
+-      yield
+-    ensure
+-      mon_exit
+-    end
+-  end
+   alias synchronize mon_synchronize
+ 
+   #
+@@ -241,12 +206,6 @@ module MonitorMixin
+     @mon_mutex = Mutex.new
+   end
+ 
+-  def mon_check_owner
+-    if @mon_owner != Thread.current
+-      raise ThreadError, "current thread not owner"
+-    end
+-  end
+-
+   def mon_enter_for_cond(count)
+     @mon_owner = Thread.current
+     @mon_count = count
+diff --git c/prelude.rb i/prelude.rb
+index 4b6ab1a..2b371e7 100644
+--- c/prelude.rb
++++ i/prelude.rb
+@@ -1,19 +1,3 @@
+-class Mutex
+-  # call-seq:
+-  #    mutex.synchronize { ... }
+-  #
+-  # Obtains a lock, runs the block, and releases the lock when the
+-  # block completes.  See the example under Mutex.
+-  def synchronize
+-    self.lock
+-    begin
+-      yield
+-    ensure
+-      self.unlock rescue nil
+-    end
+-  end
+-end
+-
+ class Thread
+   MUTEX_FOR_THREAD_EXCLUSIVE = Mutex.new # :nodoc:
+ 
+diff --git c/thread.c i/thread.c
+index c7da34b..0ea452b 100644
+--- c/thread.c
++++ i/thread.c
+@@ -3755,6 +3755,16 @@ rb_mutex_synchronize(VALUE mutex, VALUE (*func)(VALUE arg), VALUE arg)
+     return rb_ensure(func, arg, rb_mutex_unlock, mutex);
+ }
+ 
++static VALUE
++rb_mutex_synchronize_m(VALUE self, VALUE args)
++{
++    if (!rb_block_given_p()) {
++        rb_raise(rb_eThreadError, "must be called with a block");
++    }
++
++    return rb_mutex_synchronize(self, rb_yield, Qnil);
++}
++
+ /*
+  * Document-class: Barrier
+  */
+@@ -4714,6 +4724,7 @@ Init_Thread(void)
+     rb_define_method(rb_cMutex, "lock", rb_mutex_lock, 0);
+     rb_define_method(rb_cMutex, "unlock", rb_mutex_unlock, 0);
+     rb_define_method(rb_cMutex, "sleep", mutex_sleep, -1);
++    rb_define_method(rb_cMutex, "synchronize", rb_mutex_synchronize_m, 0);
+ 
+     recursive_key = rb_intern("__recursive_key__");
+     rb_eThreadError = rb_define_class("ThreadError", rb_eStandardError);

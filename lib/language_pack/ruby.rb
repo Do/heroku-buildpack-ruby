@@ -146,6 +146,8 @@ private
   # fetch the ruby version from bundler
   # @return [String, nil] returns the ruby version if detected or nil if none is detected
   def ruby_version
+    return 'ruby-1.9.3-p374-do'   # Custom Do.com ruby
+
     return @ruby_version if @ruby_version_run
 
     @ruby_version_run     = true
@@ -253,6 +255,7 @@ private
   # determines if a build ruby is required
   # @return [Boolean] true if a build ruby is required
   def build_ruby?
+    return false
     @build_ruby ||= !ruby_version_rbx? && !ruby_version_jruby? && !%w{ruby-1.9.3 ruby-2.0.0}.include?(ruby_version)
   end
 
@@ -277,7 +280,7 @@ ERROR
 
     FileUtils.mkdir_p(slug_vendor_ruby)
     Dir.chdir(slug_vendor_ruby) do
-      run("curl #{VENDOR_URL}/#{ruby_version}.tgz -s -o - | tar zxf -")
+      run("curl #{DO_VENDOR_URL}/#{ruby_version}.tar.gz -s -o - | tar zxf -")
     end
     error invalid_ruby_version_message unless $?.success?
 
