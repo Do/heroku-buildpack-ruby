@@ -80,6 +80,7 @@ class LanguagePack::Ruby < LanguagePack::Base
     install_libgd
     install_icu4c
     install_postgresql_client
+    install_vim
     allow_git do
       install_language_pack_gems
       build_bundler
@@ -224,7 +225,7 @@ private
   def setup_profiled
     set_env_override "GEM_PATH", "$HOME/#{slug_vendor_base}:$GEM_PATH"
     set_env_default  "LANG",     "en_US.UTF-8"
-    set_env_override "PATH",     "$HOME/bin:$HOME/#{slug_vendor_base}/bin:$HOME/vendor/#{PG_CLIENT_VENDOR_PATH}/bin:$PATH"
+    set_env_override "PATH",     "$HOME/bin:$HOME/#{slug_vendor_base}/bin:$HOME/vendor/#{PG_CLIENT_VENDOR_PATH}/bin:$HOME/vendor/#{VIM_VENDOR_PATH}/bin:$PATH"
     set_env_default  "LD_LIBRARY_PATH", "/app/vendor/#{ICU4C_VENDOR_PATH}/lib"
 
     if ruby_version_jruby?
@@ -409,6 +410,14 @@ WARNING
     FileUtils.mkdir_p dir
     Dir.chdir(dir) do
       run("curl #{DO_VENDOR_URL}/postgresql-client-#{PG_CLIENT_VERSION}.tar.gz -s -o - | tar xzf -")
+    end
+  end
+
+  def install_vim
+    dir = File.join('vendor', VIM_VENDOR_PATH)
+    FileUtils.mkdir_p dir
+    Dir.chdir(dir) do
+      run("curl #{DO_VENDOR_URL}/vim-#{VIM_VERSION}.tar.gz -s -o - | tar xzf -")
     end
   end
 
